@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File History</title>
+    <style>
+        body {
+            padding: 20px;
+            color: var(--vscode-foreground);
+            font-family: var(--vscode-font-family);
+            background-color: var(--vscode-editor-background);
+        }
+        .commit {
+            margin-bottom: 20px;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 4px;
+        }
+        .commit-header {
+            padding: 10px;
+            background-color: var(--vscode-editor-lineHighlightBackground);
+            border-bottom: 1px solid var(--vscode-panel-border);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .commit-header:hover {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+        .commit-info {
+            flex: 1;
+        }
+        .commit-hash {
+            color: var(--vscode-textLink-foreground);
+            font-family: monospace;
+        }
+        .commit-author {
+            color: var(--vscode-textPreformat-foreground);
+            font-style: italic;
+        }
+        .commit-time {
+            color: var(--vscode-descriptionForeground);
+        }
+        .commit-message {
+            margin-top: 5px;
+            color: var(--vscode-foreground);
+        }
+        .commit-content {
+            padding: 10px;
+            display: none;
+            background-color: var(--vscode-editor-background);
+        }
+        .commit-content.show {
+            display: block;
+        }
+        .diff {
+            font-family: monospace;
+            white-space: pre-wrap;
+            margin: 10px 0;
+        }
+        .diff-add {
+            color: var(--vscode-gitDecoration-addedResourceForeground);
+            background-color: var(--vscode-diffEditor-insertedTextBackground);
+        }
+        .diff-remove {
+            color: var(--vscode-gitDecoration-deletedResourceForeground);
+            background-color: var(--vscode-diffEditor-removedTextBackground);
+        }
+        .diff-header {
+            color: var(--vscode-textPreformat-foreground);
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="commits"></div>
+    <script>
+        const vscode = acquireVsCodeApi();
+        
+        window.addEventListener('message', event => {
+            const message = event.data;
+            switch (message.type) {
+                case 'commits':
+                    displayCommits(message.commits);
+                    break;
+            }
+        });
+
+        function displayCommits(commits) {
+            const commitsContainer = document.getElementById('commits');
+            commitsContainer.innerHTML = '';
+            
+            commits.forEach(commit => {
+                const commitElement = document.createElement('div');
+                commitElement.className = 'commit';
+                
+                const header = document.createElement('div');
+                header.className = 'commit-header';
+                
+                const info = document.createElement('div');
+                info.className = 'commit-info';
+                info.innerHTML = `
+                    <span class="commit-hash">${commit.hash}</span>
+                    <span class="commit-author">${commit.author}</span>
+                    <span class="commit-time">${commit.time}</span>
+                    <div class="commit-message">${commit.message}</div>
+                `;
+                
+                const content = document.createElement('div');
+                content.className = 'commit-content';
+                
+                // Process diff content
+                const diffLines = commit.diff.split('\n');
+                const diffHtml = diffLines.map(line => {
+                    if (line.startsWith('+')) {
+                        return `<div class="diff diff-add">${escapeHtml(line)}</div>`;
+                    } else if (line.startsWith('-')) {
+                        return `<div class="diff diff-remove">${escapeHtml(line)}</div>`;
+                    } else if (line.startsWith('@@')) {
+                        return `<div class="diff diff-header">${escapeHtml(line)}</div>`;
+                    }
+                    return `<div class="diff">${escapeHtml(line)}</div>`;
+                }).join('');
+                
+                content.innerHTML = diffHtml;
+                
+                header.appendChild(info);
+                commitElement.appendChild(header);
+                commitElement.appendChild(content);
+                
+                header.addEventListener('click', () => {
+                    content.classList.toggle('show');
+                });
+                
+                commitsContainer.appendChild(commitElement);
+            });
+        }
+
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>

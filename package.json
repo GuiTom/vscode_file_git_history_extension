@@ -1,0 +1,51 @@
+{
+  "name": "vscode-file-history",
+  "displayName": "File History",
+  "description": "Show file history through right-click menu with a beautiful UI",
+  "version": "0.0.1",
+  "publisher": "YOUR_PUBLISHER_NAME",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Other",
+    "SCM"
+  ],
+  "keywords": [
+    "git",
+    "history",
+    "file history",
+    "version control",
+    "diff"
+  ],
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/vscode-file-history.git"
+  },
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [{
+      "command": "vscode-file-history.showFileHistory",
+      "title": "Show File History"
+    }],
+    "menus": {
+      "explorer/context": [{
+        "command": "vscode-file-history.showFileHistory",
+        "group": "navigation"
+      }]
+    }
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "pretest": "npm run lint",
+    "test": "node ./test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.84.0",
+    "@types/node": "18.x",
+    "eslint": "^8.47.0",
+    "typescript": "^5.1.6"
+  }
+}
