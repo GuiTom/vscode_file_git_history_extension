@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Revision</title>
+    <style>
+        body {
+            padding: 10px;
+            font-family: var(--vscode-font-family);
+            color: var(--vscode-foreground);
+            background-color: var(--vscode-editor-background);
+        }
+        .commit-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .commit-item {
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .commit-item:hover {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+        .commit-hash {
+            color: var(--vscode-textLink-foreground);
+            font-family: monospace;
+        }
+        .commit-author {
+            color: var(--vscode-textPreformat-foreground);
+            margin-left: 10px;
+        }
+        .commit-date {
+            color: var(--vscode-descriptionForeground);
+            float: right;
+        }
+        .commit-message {
+            margin-top: 5px;
+            color: var(--vscode-foreground);
+        }
+        .search-box {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            background: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 4px;
+        }
+        .branch-list {
+            margin-bottom: 15px;
+        }
+        .branch-item {
+            display: inline-block;
+            padding: 4px 8px;
+            margin: 0 5px 5px 0;
+            background: var(--vscode-badge-background);
+            color: var(--vscode-badge-foreground);
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .branch-item:hover {
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <input type="text" class="search-box" placeholder="Search commits..." id="searchInput">
+    <div class="branch-list" id="branchList"></div>
+    <ul class="commit-list" id="commitList"></ul>
+
+    <script>
+        const vscode = acquireVsCodeApi();
+        let commits = [];
+        let branches = [];
+
+        // Handle messages from extension
+        window.addEventListener('message', event => {
+            const message = event.data;
+            switch (message.type) {
+                case 'commits':
+                    commits = message.commits;
+                    renderCommits(commits);
+                    break;
+                case 'branches':
+                    branches = message.branches;
+                    renderBranches(branches);
+                    break;
+            }
+        });
+
+        function renderBranches(branches) {
+            const branchList = document.getElementById('branchList');
+            branchList.innerHTML = branches.map(branch => 
+                `<span class="branch-item" onclick="selectBranch('${branch}')">${branch}</span>`
+            ).join('');
+        }
+
+        function renderCommits(commits) {
+            const commitList = document.getElementById('commitList');
+            commitList.innerHTML = commits.map(commit => `
+                <li class="commit-item" onclick="selectCommit('${commit.hash}')">
+                    <span class="commit-hash">${commit.hash.substring(0, 7)}</span>
+                    <span class="commit-author">${commit.author}</span>
+                    <span class="commit-date">${commit.date}</span>
+                    <div class="commit-message">${commit.message}</div>
+                </li>
+            `).join('');
+        }
+
+        function selectCommit(hash) {
+            vscode.postMessage({
+                type: 'select',
+                revision: hash
+            });
+        }
+
+        function selectBranch(branch) {
+            vscode.postMessage({
+                type: 'select',
+                revision: branch
+            });
+        }
+
+        // Search functionality
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const filteredCommits = commits.filter(commit => 
+                commit.message.toLowerCase().includes(searchTerm) ||
+                commit.author.toLowerCase().includes(searchTerm) ||
+                commit.hash.toLowerCase().includes(searchTerm)
+            );
+            renderCommits(filteredCommits);
+        });
+    </script>
+</body>
+</html>

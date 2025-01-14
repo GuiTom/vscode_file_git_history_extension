@@ -36,15 +36,39 @@
     "commands": [{
       "command": "vscode-file-history.showFileHistory",
       "title": "Show File History"
+    },
+    {
+      "command": "vscode-file-history.compareWithBranch",
+      "title": "Compare with Branch"
+    },
+    {
+      "command": "vscode-file-history.compareWithRevision",
+      "title": "Compare with Revision"
     }],
     "menus": {
       "explorer/context": [{
         "command": "vscode-file-history.showFileHistory",
         "group": "navigation"
+      },
+      {
+        "command": "vscode-file-history.compareWithBranch",
+        "group": "navigation@1"
+      },
+      {
+        "command": "vscode-file-history.compareWithRevision",
+        "group": "navigation@2"
       }],
       "editor/context": [{
         "command": "vscode-file-history.showFileHistory",
         "group": "navigation"
+      },
+      {
+        "command": "vscode-file-history.compareWithBranch",
+        "group": "navigation@1"
+      },
+      {
+        "command": "vscode-file-history.compareWithRevision",
+        "group": "navigation@2"
       }]
     }
   },
