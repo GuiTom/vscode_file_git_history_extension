@@ -138,6 +138,7 @@ class FileHistoryPanel {
 class RevisionSelectPanel {
     static currentPanel = undefined;
     static viewType = 'revisionSelect';
+    static lastActiveColumn = undefined;
 
     constructor(panel, extensionPath, filePath) {
         this.panel = panel;
@@ -153,13 +154,15 @@ class RevisionSelectPanel {
         );
         
         this.panel.webview.html = this._getWebviewContent();
-        this._loadCommitsAndBranches();
+        this._loadCommits();
     }
 
     static createOrShow(extensionPath, filePath) {
-        const column = vscode.window.activeTextEditor
+        RevisionSelectPanel.lastActiveColumn = vscode.window.activeTextEditor
             ? vscode.window.activeTextEditor.viewColumn
             : undefined;
+
+        const column = RevisionSelectPanel.lastActiveColumn || vscode.ViewColumn.One;
 
         if (RevisionSelectPanel.currentPanel) {
             RevisionSelectPanel.currentPanel.panel.reveal(column);
@@ -169,7 +172,7 @@ class RevisionSelectPanel {
         const panel = vscode.window.createWebviewPanel(
             RevisionSelectPanel.viewType,
             'Select Revision',
-            column || vscode.ViewColumn.One,
+            column,
             {
                 enableScripts: true,
                 localResourceRoots: [vscode.Uri.file(path.join(extensionPath, 'media'))],
@@ -181,11 +184,8 @@ class RevisionSelectPanel {
         return RevisionSelectPanel.currentPanel;
     }
 
-    async _loadCommitsAndBranches() {
+    async _loadCommits() {
         try {
-            const branches = await getBranches(this.filePath);
-            this.panel.webview.postMessage({ type: 'branches', branches });
-
             const commits = await this._getDetailedCommitHistory(this.filePath);
             this.panel.webview.postMessage({ type: 'commits', commits });
         } catch (error) {
@@ -195,27 +195,41 @@ class RevisionSelectPanel {
 
     _getDetailedCommitHistory(filePath) {
         return new Promise((resolve, reject) => {
-            exec(`git log --follow --pretty=format:"%H|%an|%ar|%s" "${filePath}"`, {
+            // Get current commit hash for the specific file
+            exec(`git rev-list -1 HEAD "${filePath}"`, {
                 cwd: path.dirname(filePath)
-            }, (error, stdout, stderr) => {
+            }, (error, currentHash, stderr) => {
                 if (error) {
                     reject(error);
                     return;
                 }
 
-                const commits = stdout.split('\n')
-                    .filter(line => line.trim())
-                    .map(line => {
-                        const [hash, author, date, ...messageParts] = line.split('|');
-                        return {
-                            hash,
-                            author,
-                            date,
-                            message: messageParts.join('|')
-                        };
-                    });
+                currentHash = currentHash.trim();
 
-                resolve(commits);
+                // Then get the commit history
+                exec(`git log --follow --pretty=format:"%H|%an|%ar|%s" "${filePath}"`, {
+                    cwd: path.dirname(filePath)
+                }, (error, stdout, stderr) => {
+                    if (error) {
+                        reject(error);
+                        return;
+                    }
+
+                    const commits = stdout.split('\n')
+                        .filter(line => line.trim())
+                        .map(line => {
+                            const [hash, author, date, ...messageParts] = line.split('|');
+                            return {
+                                hash,
+                                author,
+                                date,
+                                message: messageParts.join('|'),
+                                isCurrent: hash === currentHash
+                            };
+                        });
+
+                    resolve(commits);
+                });
             });
         });
     }
@@ -229,8 +243,13 @@ class RevisionSelectPanel {
     async _handleMessage(message) {
         if (message.type === 'select') {
             await compareWithRevision(this.filePath, message.revision);
-            this.dispose();
+            // Don't dispose the panel, just hide it
+            this.panel.visible = false;
         }
+    }
+
+    show() {
+        this.panel.reveal(RevisionSelectPanel.lastActiveColumn);
     }
 
     dispose() {
@@ -243,24 +262,6 @@ class RevisionSelectPanel {
             }
         }
     }
-}
-
-async function getBranches(filePath) {
-    return new Promise((resolve, reject) => {
-        exec('git branch -a', {
-            cwd: path.dirname(filePath)
-        }, (error, stdout, stderr) => {
-            if (error) {
-                reject(error);
-                return;
-            }
-            const branches = stdout.split('\n')
-                .map(b => b.trim())
-                .filter(b => b && !b.startsWith('*'))
-                .map(b => b.replace('remotes/origin/', ''));
-            resolve([...new Set(branches)]);
-        });
-    });
 }
 
 async function getGitRoot(filePath) {
@@ -304,37 +305,37 @@ async function compareWithRevision(filePath, revision) {
         const uri1 = vscode.Uri.file(filePath);
         const uri2 = vscode.Uri.file(tempFile);
         
-        await vscode.commands.executeCommand('vscode.diff', uri1, uri2, `${path.basename(filePath)} (Current ↔ ${revision})`);
+        // Create a diff editor with a back button
+        const diffTitle = `${path.basename(filePath)} (Current ↔ ${revision})`;
+        const diff = await vscode.commands.executeCommand('vscode.diff', uri1, uri2, diffTitle);
         
-        // Clean up temp file after a short delay
-        setTimeout(() => {
-            try {
-                require('fs').unlinkSync(tempFile);
-            } catch (err) {
-                console.error('Error cleaning up temp file:', err);
+        // Add back button to editor title
+        const backButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+        backButton.text = "$(arrow-left) Back to Revision Selection";
+        backButton.tooltip = "Go back to revision selection";
+        backButton.command = 'vscode-file-history.backToRevisionSelect';
+        backButton.show();
+
+        // Clean up temp file and back button when diff editor is closed
+        const disposable = vscode.window.onDidChangeVisibleTextEditors(editors => {
+            const isDiffStillOpen = editors.some(e => e.document.uri.fsPath === tempFile);
+            if (!isDiffStillOpen) {
+                try {
+                    require('fs').unlinkSync(tempFile);
+                    backButton.dispose();
+                    disposable.dispose();
+                } catch (err) {
+                    console.error('Error cleaning up:', err);
+                }
             }
-        }, 1000);
+        });
+        
     } catch (error) {
         vscode.window.showErrorMessage(`Error comparing files: ${error.message}`);
     }
 }
 
-async function compareWithBranch(filePath) {
-    try {
-        const branches = await getBranches(filePath);
-        const selectedBranch = await vscode.window.showQuickPick(branches, {
-            placeHolder: 'Select a branch to compare with'
-        });
-
-        if (selectedBranch) {
-            await compareWithRevision(filePath, selectedBranch);
-        }
-    } catch (error) {
-        vscode.window.showErrorMessage(`Error comparing with branch: ${error.message}`);
-    }
-}
-
-async function showRevisionSelect(filePath) {
+function showRevisionSelect(filePath) {
     RevisionSelectPanel.createOrShow(vscode.extensions.getExtension('ChenChao.vscode-file-history').extensionPath, filePath);
 }
 
@@ -374,13 +375,6 @@ function activate(context) {
         panel.panel.webview.html = html;
     });
 
-    let compareWithBranchDisposable = vscode.commands.registerCommand('vscode-file-history.compareWithBranch', function () {
-        const editor = vscode.window.activeTextEditor;
-        if (editor) {
-            compareWithBranch(editor.document.uri.fsPath);
-        }
-    });
-
     let compareWithRevisionDisposable = vscode.commands.registerCommand('vscode-file-history.compareWithRevision', function () {
         const editor = vscode.window.activeTextEditor;
         if (editor) {
@@ -388,9 +382,15 @@ function activate(context) {
         }
     });
 
+    let backToRevisionSelectDisposable = vscode.commands.registerCommand('vscode-file-history.backToRevisionSelect', () => {
+        if (RevisionSelectPanel.currentPanel) {
+            RevisionSelectPanel.currentPanel.show();
+        }
+    });
+
     context.subscriptions.push(disposable);
-    context.subscriptions.push(compareWithBranchDisposable);
     context.subscriptions.push(compareWithRevisionDisposable);
+    context.subscriptions.push(backToRevisionSelectDisposable);
 }
 
 function deactivate() {}

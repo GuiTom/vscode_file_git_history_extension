@@ -24,8 +24,20 @@
             cursor: pointer;
             transition: background-color 0.2s;
         }
-        .commit-item:hover {
+        .commit-item:hover:not(.current-commit) {
             background-color: var(--vscode-list-hoverBackground);
+        }
+        .current-commit {
+            background-color: var(--vscode-editor-inactiveSelectionBackground);
+            cursor: not-allowed;
+            opacity: 0.8;
+        }
+        .current-commit::after {
+            content: '(Current Version)';
+            float: right;
+            color: var(--vscode-descriptionForeground);
+            font-style: italic;
+            margin-right: 10px;
         }
         .commit-hash {
             color: var(--vscode-textLink-foreground);
@@ -52,59 +64,30 @@
             border: 1px solid var(--vscode-input-border);
             border-radius: 4px;
         }
-        .branch-list {
-            margin-bottom: 15px;
-        }
-        .branch-item {
-            display: inline-block;
-            padding: 4px 8px;
-            margin: 0 5px 5px 0;
-            background: var(--vscode-badge-background);
-            color: var(--vscode-badge-foreground);
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .branch-item:hover {
-            opacity: 0.8;
-        }
     </style>
 </head>
 <body>
     <input type="text" class="search-box" placeholder="Search commits..." id="searchInput">
-    <div class="branch-list" id="branchList"></div>
     <ul class="commit-list" id="commitList"></ul>
 
     <script>
         const vscode = acquireVsCodeApi();
         let commits = [];
-        let branches = [];
 
         // Handle messages from extension
         window.addEventListener('message', event => {
             const message = event.data;
-            switch (message.type) {
-                case 'commits':
-                    commits = message.commits;
-                    renderCommits(commits);
-                    break;
-                case 'branches':
-                    branches = message.branches;
-                    renderBranches(branches);
-                    break;
+            if (message.type === 'commits') {
+                commits = message.commits;
+                renderCommits(commits);
             }
         });
-
-        function renderBranches(branches) {
-            const branchList = document.getElementById('branchList');
-            branchList.innerHTML = branches.map(branch => 
-                `<span class="branch-item" onclick="selectBranch('${branch}')">${branch}</span>`
-            ).join('');
-        }
 
         function renderCommits(commits) {
             const commitList = document.getElementById('commitList');
             commitList.innerHTML = commits.map(commit => `
-                <li class="commit-item" onclick="selectCommit('${commit.hash}')">
+                <li class="commit-item${commit.isCurrent ? ' current-commit' : ''}"
+                    ${commit.isCurrent ? '' : `onclick="selectCommit('${commit.hash}')"`}>
                     <span class="commit-hash">${commit.hash.substring(0, 7)}</span>
                     <span class="commit-author">${commit.author}</span>
                     <span class="commit-date">${commit.date}</span>
@@ -117,13 +100,6 @@
             vscode.postMessage({
                 type: 'select',
                 revision: hash
-            });
-        }
-
-        function selectBranch(branch) {
-            vscode.postMessage({
-                type: 'select',
-                revision: branch
             });
         }
 
