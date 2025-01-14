@@ -32,7 +32,8 @@ class FileHistoryPanel {
             column || vscode.ViewColumn.One,
             {
                 enableScripts: true,
-                localResourceRoots: [vscode.Uri.file(path.join(extensionPath, 'media'))]
+                localResourceRoots: [vscode.Uri.file(path.join(extensionPath, 'media'))],
+                retainContextWhenHidden: true
             }
         );
 
@@ -113,6 +114,25 @@ class FileHistoryPanel {
             });
         });
     }
+
+    async handleWebviewMessage(message) {
+        switch (message.command) {
+            case 'getDiff':
+                try {
+                    const { stdout: diff } = await exec(`git diff ${message.hash}^..${message.hash} -- "${message.filePath}"`, {
+                        cwd: path.dirname(message.filePath)
+                    });
+                    this.panel.webview.postMessage({ command: 'showDiff', hash: message.hash, diff });
+                } catch (error) {
+                    console.error(error);
+                }
+                break;
+            case 'saveViewMode':
+                // Save the view mode preference
+                await vscode.workspace.getConfiguration().update('fileHistory.viewMode', message.isUnified);
+                break;
+        }
+    }
 }
 
 function activate(context) {
@@ -129,6 +149,26 @@ function activate(context) {
         const filePath = uri.fsPath;
         const panel = FileHistoryPanel.createOrShow(context.extensionPath);
         await panel.updateContent(filePath);
+
+        panel.panel.webview.onDidReceiveMessage(
+            async message => {
+                await panel.handleWebviewMessage(message);
+            },
+            undefined,
+            context.subscriptions
+        );
+
+        // Get the saved view mode preference
+        const savedViewMode = await vscode.workspace.getConfiguration().get('fileHistory.viewMode', false);
+
+        // Read the HTML template
+        const htmlPath = path.join(context.extensionPath, 'media', 'main.html');
+        let html = require('fs').readFileSync(htmlPath, 'utf8');
+
+        // Replace the placeholder with the saved view mode
+        html = html.replace('{{initialViewMode}}', savedViewMode);
+
+        panel.panel.webview.html = html;
     });
 
     context.subscriptions.push(disposable);
