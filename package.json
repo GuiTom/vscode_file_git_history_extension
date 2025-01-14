@@ -1,9 +1,9 @@
 {
   "name": "vscode-file-history",
-  "displayName": "File History",
-  "description": "Show file history through right-click menu with a beautiful UI",
-  "version": "0.0.1",
-  "publisher": "YOUR_PUBLISHER_NAME",
+  "displayName": "Git File History",
+  "description": "Show file history through right-click menu with a beautiful UI and split-view diff support",
+  "version": "1.0.0",
+  "publisher": "ChenChao",
   "engines": {
     "vscode": "^1.84.0"
   },
@@ -16,14 +16,17 @@
     "history",
     "file history",
     "version control",
-    "diff"
+    "diff",
+    "split view",
+    "side by side"
   ],
-  "icon": "media/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/YOUR_USERNAME/vscode-file-history.git"
+    "url": ""
   },
-  "activationEvents": [],
+  "activationEvents": [
+    "onCommand:vscode-file-history.showFileHistory"
+  ],
   "main": "./extension.js",
   "contributes": {
     "commands": [{
@@ -34,18 +37,25 @@
       "explorer/context": [{
         "command": "vscode-file-history.showFileHistory",
         "group": "navigation"
+      }],
+      "editor/context": [{
+        "command": "vscode-file-history.showFileHistory",
+        "group": "navigation"
       }]
     }
   },
   "scripts": {
     "lint": "eslint .",
     "pretest": "npm run lint",
-    "test": "node ./test/runTest.js"
+    "test": "node ./test/runTest.js",
+    "package": "vsce package --no-dependencies",
+    "publish": "vsce publish"
   },
   "devDependencies": {
     "@types/vscode": "^1.84.0",
     "@types/node": "18.x",
     "eslint": "^8.47.0",
-    "typescript": "^5.1.6"
+    "typescript": "^5.1.6",
+    "@vscode/vsce": "^2.22.0"
   }
 }

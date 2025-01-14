@@ -54,6 +54,20 @@
         .commit-content.show {
             display: block;
         }
+        .view-mode-toggle {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 6px 12px;
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .view-mode-toggle:hover {
+            background-color: var(--vscode-button-hoverBackground);
+        }
         .diff {
             font-family: monospace;
             white-space: pre-wrap;
@@ -71,12 +85,33 @@
             color: var(--vscode-textPreformat-foreground);
             margin-bottom: 5px;
         }
+        .diff-container {
+            display: flex;
+            gap: 20px;
+        }
+        .diff-container.unified {
+            display: block;
+        }
+        .diff-side {
+            flex: 1;
+            border: 1px solid var(--vscode-panel-border);
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .diff-side-header {
+            font-weight: bold;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid var(--vscode-panel-border);
+        }
     </style>
 </head>
 <body>
     <div id="commits"></div>
+    <button id="viewModeToggle" class="view-mode-toggle">Switch to Split View</button>
     <script>
         const vscode = acquireVsCodeApi();
+        let isUnifiedView = true;
         
         window.addEventListener('message', event => {
             const message = event.data;
@@ -87,6 +122,19 @@
             }
         });
 
+        document.getElementById('viewModeToggle').addEventListener('click', () => {
+            isUnifiedView = !isUnifiedView;
+            document.getElementById('viewModeToggle').textContent = 
+                isUnifiedView ? 'Switch to Split View' : 'Switch to Unified View';
+            const commits = document.querySelectorAll('.commit');
+            commits.forEach(commit => {
+                const content = commit.querySelector('.commit-content');
+                if (content.classList.contains('show')) {
+                    updateDiffView(content, commit.commitData);
+                }
+            });
+        });
+
         function displayCommits(commits) {
             const commitsContainer = document.getElementById('commits');
             commitsContainer.innerHTML = '';
@@ -94,6 +142,7 @@
             commits.forEach(commit => {
                 const commitElement = document.createElement('div');
                 commitElement.className = 'commit';
+                commitElement.commitData = commit;
                 
                 const header = document.createElement('div');
                 header.className = 'commit-header';
@@ -110,31 +159,70 @@
                 const content = document.createElement('div');
                 content.className = 'commit-content';
                 
-                // Process diff content
-                const diffLines = commit.diff.split('\n');
-                const diffHtml = diffLines.map(line => {
-                    if (line.startsWith('+')) {
-                        return `<div class="diff diff-add">${escapeHtml(line)}</div>`;
-                    } else if (line.startsWith('-')) {
-                        return `<div class="diff diff-remove">${escapeHtml(line)}</div>`;
-                    } else if (line.startsWith('@@')) {
-                        return `<div class="diff diff-header">${escapeHtml(line)}</div>`;
-                    }
-                    return `<div class="diff">${escapeHtml(line)}</div>`;
-                }).join('');
-                
-                content.innerHTML = diffHtml;
-                
                 header.appendChild(info);
                 commitElement.appendChild(header);
                 commitElement.appendChild(content);
                 
                 header.addEventListener('click', () => {
                     content.classList.toggle('show');
+                    if (content.classList.contains('show')) {
+                        updateDiffView(content, commit);
+                    }
                 });
                 
                 commitsContainer.appendChild(commitElement);
             });
+        }
+
+        function updateDiffView(contentElement, commit) {
+            const diffLines = commit.diff.split('\n');
+            if (isUnifiedView) {
+                contentElement.innerHTML = `
+                    <div class="diff-container unified">
+                        ${diffLines.map(line => {
+                            if (line.startsWith('+')) {
+                                return `<div class="diff diff-add">${escapeHtml(line)}</div>`;
+                            } else if (line.startsWith('-')) {
+                                return `<div class="diff diff-remove">${escapeHtml(line)}</div>`;
+                            } else if (line.startsWith('@@')) {
+                                return `<div class="diff diff-header">${escapeHtml(line)}</div>`;
+                            }
+                            return `<div class="diff">${escapeHtml(line)}</div>`;
+                        }).join('')}
+                    </div>
+                `;
+            } else {
+                const beforeLines = [];
+                const afterLines = [];
+                let currentSection = '';
+                
+                diffLines.forEach(line => {
+                    if (line.startsWith('@@')) {
+                        beforeLines.push(`<div class="diff diff-header">${escapeHtml(line)}</div>`);
+                        afterLines.push(`<div class="diff diff-header">${escapeHtml(line)}</div>`);
+                    } else if (line.startsWith('-')) {
+                        beforeLines.push(`<div class="diff">${escapeHtml(line.substring(1))}</div>`);
+                    } else if (line.startsWith('+')) {
+                        afterLines.push(`<div class="diff">${escapeHtml(line.substring(1))}</div>`);
+                    } else {
+                        beforeLines.push(`<div class="diff">${escapeHtml(line)}</div>`);
+                        afterLines.push(`<div class="diff">${escapeHtml(line)}</div>`);
+                    }
+                });
+
+                contentElement.innerHTML = `
+                    <div class="diff-container">
+                        <div class="diff-side">
+                            <div class="diff-side-header">Before</div>
+                            ${beforeLines.join('')}
+                        </div>
+                        <div class="diff-side">
+                            <div class="diff-side-header">After</div>
+                            ${afterLines.join('')}
+                        </div>
+                    </div>
+                `;
+            }
         }
 
         function escapeHtml(unsafe) {

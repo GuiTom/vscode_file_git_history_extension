@@ -1,46 +1,54 @@
-# File History
+# Git File History
 
-A Visual Studio Code extension that provides a beautiful and interactive UI for viewing file history through Git. View your file's commit history, changes, and diffs in a user-friendly interface.
+A VSCode extension that provides an enhanced file history viewer with both unified and split-view diff modes.
 
 ## Features
 
-- 🎯 Quick access through right-click menu in file explorer
-- 💫 Modern, interactive UI for viewing file history
-- 🎨 Color-coded diffs (additions in green, deletions in red)
-- 📝 Detailed commit information (hash, author, timestamp, message)
-- 🔍 Expandable/collapsible commit details
-- 🎭 Follows VS Code's theme for consistent look and feel
+- View file history through the right-click menu
+- Beautiful and intuitive UI that matches VSCode's theme
+- Two diff viewing modes:
+  - **Unified View**: Traditional git diff format with + and - marks
+  - **Split View**: Side-by-side comparison of before and after changes
+- Easy switching between view modes with a toggle button
+- Works directly from file explorer or editor context menu
+- Follows VSCode's color theme for seamless integration
 
 ## Usage
 
-1. Right-click on any file in the explorer
-2. Select "Show File History"
-3. A new panel will open showing the file's commit history
-4. Click on any commit to view its detailed changes
+1. Right-click on a file in the explorer or editor
+2. Select "Show File History" from the context menu
+3. Click on any commit to view its changes
+4. Use the toggle button in the top-right corner to switch between unified and split views
 
 ## Requirements
 
-- Visual Studio Code v1.84.0 or higher
+- Visual Studio Code ^1.84.0
 - Git installed and available in PATH
+
+## Installation
+
+1. Install through VS Code Extensions. Search for `Git File History`
+2. Install through [VSCode Marketplace](https://marketplace.visualstudio.com/items?itemName=YOUR_PUBLISHER_NAME.vscode-file-history)
 
 ## Extension Settings
 
 This extension contributes the following settings:
 
-* None at the moment
+* None at the moment. Future versions may include customization options.
 
 ## Known Issues
 
-* None at the moment
+Please report issues on the [GitHub repository](https://github.com/YOUR_USERNAME/vscode-file-history/issues).
 
 ## Release Notes
 
-### 0.0.1
+### 1.0.0
 
 Initial release:
-- Basic file history viewing functionality
-- Interactive UI with commit details
-- Color-coded diff view
+- File history viewing through context menu
+- Unified and split-view diff modes
+- Theme-aware UI
+- Toggle button for switching view modes
 
 ## Contributing
 
