@@ -1,6 +1,12 @@
 const vscode = require('vscode');
 const { exec } = require('child_process');
 const path = require('path');
+const util = require('util');
+const execPromise = util.promisify(exec);
+
+// Store active decorations globally
+let activeDecorations = new Map();
+let isBlameVisible = false;
 
 class FileHistoryPanel {
     static currentPanel = undefined;
@@ -335,8 +341,116 @@ async function compareWithRevision(filePath, revision) {
     }
 }
 
+async function compareWithBranch(filePath) {
+    try {
+        const gitRoot = await getGitRoot(filePath);
+        const relativePath = await getRelativeToGitRoot(filePath);
+        
+        // Get list of branches
+        const { stdout: branchOutput } = await execPromise('git branch', { cwd: gitRoot });
+        const branches = branchOutput.split('\n')
+            .map(b => b.trim().replace('* ', ''))
+            .filter(b => b);
+        
+        // Let user select a branch
+        const selectedBranch = await vscode.window.showQuickPick(branches, {
+            placeHolder: 'Select a branch to compare with'
+        });
+        
+        if (!selectedBranch) {
+            return; // User cancelled
+        }
+        
+        // Get the git show output for the file in the selected branch
+        const { stdout: fileContent } = await execPromise(`git show ${selectedBranch}:${relativePath}`, { cwd: gitRoot });
+        
+        // Create a temporary file with the branch content
+        const tempDir = path.join(gitRoot, '.git', 'temp');
+        if (!require('fs').existsSync(tempDir)) {
+            require('fs').mkdirSync(tempDir, { recursive: true });
+        }
+        const tempFile = path.join(tempDir, `${path.basename(filePath)}.${selectedBranch}`);
+        require('fs').writeFileSync(tempFile, fileContent);
+
+        // Open diff view
+        await vscode.commands.executeCommand('vscode.diff',
+            vscode.Uri.file(tempFile),
+            vscode.Uri.file(filePath),
+            `${path.basename(filePath)} (${selectedBranch} ↔ Current)`
+        );
+
+        // Clean up temp file after a delay
+        setTimeout(() => {
+            try {
+                require('fs').unlinkSync(tempFile);
+            } catch (e) {
+                // Ignore cleanup errors
+            }
+        }, 1000);
+    } catch (error) {
+        vscode.window.showErrorMessage(`Error comparing with branch: ${error.message}`);
+    }
+}
+
 function showRevisionSelect(filePath) {
     RevisionSelectPanel.createOrShow(vscode.extensions.getExtension('ChenChao.vscode-file-history').extensionPath, filePath);
+}
+
+async function showGitBlame(filePath) {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+        vscode.window.showErrorMessage('No active text editor found');
+        return;
+    }
+
+    try {
+        const gitRoot = await getGitRoot(filePath);
+        const relativePath = await getRelativeToGitRoot(filePath);
+        
+        // Get git blame information
+        const { stdout } = await execPromise(`git -C "${gitRoot}" blame -l --date=short "${relativePath}"`);
+        const blameLines = stdout.split('\n');
+        
+        // Clear any existing decorations
+        clearGitBlame();
+        
+        // Create decorations for each line
+        blameLines.forEach((blameLine, index) => {
+            if (!blameLine) return;
+            
+            const match = blameLine.match(/^([^\(]+)\s*\((.*?)\s+(\d{4}-\d{2}-\d{2})/);
+            if (match) {
+                const [, commitId, author, date] = match;
+                const decoration = vscode.window.createTextEditorDecorationType({
+                    after: {
+                        contentText: `  ${author} • ${date.slice(2)} • ${commitId.slice(0, 7)}`,
+                        color: '#888888',
+                        margin: '0 0 0 3em',
+                    }
+                });
+                activeDecorations.set(index, decoration);
+            }
+        });
+
+        // Apply decorations
+        activeDecorations.forEach((decoration, line) => {
+            const range = new vscode.Range(line, 0, line, 0);
+            editor.setDecorations(decoration, [range]);
+        });
+
+        isBlameVisible = true;
+        vscode.commands.executeCommand('setContext', 'gitBlameVisible', true);
+
+    } catch (error) {
+        vscode.window.showErrorMessage(`Error showing git blame: ${error.message}`);
+    }
+}
+
+function clearGitBlame() {
+    activeDecorations.forEach(decoration => decoration.dispose());
+    activeDecorations.clear();
+    isBlameVisible = false;
+    vscode.commands.executeCommand('setContext', 'gitBlameVisible', false);
 }
 
 function activate(context) {
@@ -382,15 +496,36 @@ function activate(context) {
         }
     });
 
-    let backToRevisionSelectDisposable = vscode.commands.registerCommand('vscode-file-history.backToRevisionSelect', () => {
-        if (RevisionSelectPanel.currentPanel) {
-            RevisionSelectPanel.currentPanel.show();
+    let compareWithBranchDisposable = vscode.commands.registerCommand('vscode-file-history.compareWithBranch', () => {
+        const editor = vscode.window.activeTextEditor;
+        if (editor) {
+            compareWithBranch(editor.document.uri.fsPath);
         }
     });
 
+    let showGitBlameCommand = vscode.commands.registerCommand('vscode-file-history.showGitBlame', () => {
+        const editor = vscode.window.activeTextEditor;
+        if (editor) {
+            showGitBlame(editor.document.uri.fsPath);
+        }
+    });
+
+    let closeGitBlameCommand = vscode.commands.registerCommand('vscode-file-history.closeGitBlame', () => {
+        clearGitBlame();
+    });
+
+    // Clean up decorations when the editor changes
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor(() => {
+            clearGitBlame();
+        })
+    );
+
     context.subscriptions.push(disposable);
     context.subscriptions.push(compareWithRevisionDisposable);
-    context.subscriptions.push(backToRevisionSelectDisposable);
+    context.subscriptions.push(compareWithBranchDisposable);
+    context.subscriptions.push(showGitBlameCommand);
+    context.subscriptions.push(closeGitBlameCommand);
 }
 
 function deactivate() {}

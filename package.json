@@ -29,7 +29,8 @@
     "url": "https://github.com/chenchao/vscode-file-history/issues"
   },
   "activationEvents": [
-    "onCommand:vscode-file-history.showFileHistory"
+    "onCommand:vscode-file-history.showFileHistory",
+    "onCommand:vscode-file-history.showGitBlame"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -49,44 +50,58 @@
       {
         "command": "vscode-file-history.backToRevisionSelect",
         "title": "Git Compare: Back to Revision Selection"
+      },
+      {
+        "command": "vscode-file-history.showGitBlame",
+        "title": "Show git blame"
+      },
+      {
+        "command": "vscode-file-history.closeGitBlame",
+        "title": "Close git blame"
       }
     ],
     "menus": {
-      "explorer/context": [
-        {
-          "command": "vscode-file-history.showFileHistory",
-          "group": "navigation"
-        },
-        {
-          "submenu": "gitCompare",
-          "group": "navigation@1"
-        }
-      ],
       "editor/context": [
         {
-          "command": "vscode-file-history.showFileHistory",
-          "group": "navigation"
-        },
-        {
-          "submenu": "gitCompare",
+          "submenu": "git",
           "group": "navigation@1"
         }
       ],
-      "gitCompare": [
+      "explorer/context": [
+        {
+          "submenu": "git",
+          "group": "navigation@1"
+        }
+      ],
+      "git": [
+        {
+          "command": "vscode-file-history.showGitBlame",
+          "when": "!gitBlameVisible",
+          "group": "1_blame@1"
+        },
+        {
+          "command": "vscode-file-history.closeGitBlame",
+          "when": "gitBlameVisible",
+          "group": "1_blame@1"
+        },
+        {
+          "command": "vscode-file-history.showFileHistory",
+          "group": "2_history@1"
+        },
         {
           "command": "vscode-file-history.compareWithBranch",
-          "group": "1_compare"
+          "group": "3_compare@1"
         },
         {
           "command": "vscode-file-history.compareWithRevision",
-          "group": "1_compare"
+          "group": "3_compare@2"
         }
       ]
     },
     "submenus": [
       {
-        "id": "gitCompare",
-        "label": "Git Compare"
+        "id": "git",
+        "label": "Git"
       }
     ]
   },
